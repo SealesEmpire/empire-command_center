@@ -64,17 +64,49 @@ The model is ~15 GB. Don't bake it into the image. Put it on a Network Volume.
 
 ---
 
-## Step 2 — Build & push the image
+## Step 2 — Build & push the image (private)
+
+The image is kept **private** in GitHub Container Registry (`ghcr.io`). Pick one
+of the three ways below; all produce a `linux/amd64` image (required — RunPod
+GPUs are x86_64, which matters on Apple Silicon).
+
+### Option A — CI builds it for you (recommended)
+
+`.github/workflows/build-worker.yml` builds and pushes automatically:
+- on every push to `main` that touches `wan22-runpod-worker/**`
+- on demand from the **Actions** tab (Run workflow → optional `tag` input)
+
+It uses the built-in `GITHUB_TOKEN` — **no secrets to configure**. The resulting
+package inherits the repo's visibility, so it stays **private**. Image lands at:
+
+```
+ghcr.io/sealesempire/wan22-runpod-worker:<git-sha>   (and :latest on main)
+```
+
+### Option B — local helper script
+
+```bash
+# one-time login with a GitHub PAT (classic) that has write:packages
+echo "$GITHUB_PAT" | docker login ghcr.io -u YOUR_GH_USER --password-stdin
+
+cd wan22-runpod-worker
+./build.sh            # tag = git short SHA, also pushes :latest
+./build.sh v1         # explicit version tag
+PUSH=false ./build.sh # local build only, no push
+```
+
+### Option C — raw docker
 
 ```bash
 cd wan22-runpod-worker
-
-# Docker Hub:
-docker build --platform linux/amd64 -t YOUR_USER/wan22-runpod-worker:latest .
-docker push YOUR_USER/wan22-runpod-worker:latest
+docker buildx build --platform linux/amd64 \
+  -t ghcr.io/sealesempire/wan22-runpod-worker:v1 \
+  -t ghcr.io/sealesempire/wan22-runpod-worker:latest \
+  --push .
 ```
 
-The `--platform linux/amd64` matters if you're building on Apple Silicon — RunPod GPUs are x86_64.
+> Tag with a version (`:v1`), not just `:latest`, for production — it makes the
+> RunPod endpoint reliably pull the new build.
 
 ---
 
@@ -82,8 +114,19 @@ The `--platform linux/amd64` matters if you're building on Apple Silicon — Run
 
 In RunPod console: **Serverless → New Endpoint**.
 
+> **Private image — give RunPod pull credentials.** Because the GHCR package is
+> private, RunPod needs auth to pull it. In RunPod: **Settings → Container
+> Registry Auth → Add credentials** (or the "Container Registry Credentials"
+> field on the endpoint):
+> - Registry: `ghcr.io`
+> - Username: your GitHub username
+> - Password: a **GitHub PAT (classic) with `read:packages`** scope
+>
+> Then select these credentials on the endpoint. Without them the worker fails
+> to start with an image-pull error.
+
 **Worker config:**
-- Container Image: `YOUR_USER/wan22-runpod-worker:latest`
+- Container Image: `ghcr.io/sealesempire/wan22-runpod-worker:v1`
 - GPU type: **48 GB minimum** (A6000, L40, A100 40/80, H100)
 - Container Disk: 20 GB
 - Active workers: 0 (scale to zero when idle)
