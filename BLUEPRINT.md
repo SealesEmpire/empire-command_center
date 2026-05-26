@@ -28,6 +28,7 @@ client work, campaigns, and (carefully) trading — making it **self-sustaining*
 | Orchestrator API + retry/state machine | ✅ | `web/lib/orchestrator.ts`, `web/app/api/**` |
 | Dashboard (scene workflow, edit/reorder/generate-all) | ✅ | `web/app`, `web/components` |
 | Postgres schema (projects/scenes/jobs/assets) | ✅ | `supabase/migrations/0001_init.sql` |
+| Multi-modal + money: `worker_type`, `media_type`, image assets, **ledger** (cost/revenue + P&L) | ✅ | `supabase/migrations/0003_*`, `web/lib/ledger.ts` |
 | Storage (R2/S3) | ✅ | `web/lib/storage.ts`, worker `storage.py` |
 | FFmpeg assembler | ✅ | `web/lib/assembler.ts` |
 | Private CI image builds (matrix, all bots) | ✅ | `.github/workflows/build-worker.yml` |

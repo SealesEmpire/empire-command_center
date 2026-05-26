@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { getSummary } from "@/lib/ledger";
 import { ok, badRequest, notFound, serverError } from "@/lib/http";
 import type { Scene, Asset } from "@/lib/types";
 
@@ -81,11 +82,21 @@ export async function GET(
       .order("created_at", { ascending: false })
       .returns<Asset[]>();
 
+    const { data: images } = await db
+      .from("assets")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("kind", "image")
+      .order("created_at", { ascending: false })
+      .returns<Asset[]>();
+
     const { data: latestJobs } = await db
       .from("jobs")
       .select("*")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
+
+    const finance = await getSummary(projectId);
 
     // group assets + latest job by scene
     const assetsByScene: Record<string, Asset[]> = {};
@@ -103,6 +114,8 @@ export async function GET(
       scenes: scenes ?? [],
       assetsByScene,
       latestJobByScene,
+      images: images ?? [],
+      finance,
     });
   } catch (e) {
     return serverError(e);

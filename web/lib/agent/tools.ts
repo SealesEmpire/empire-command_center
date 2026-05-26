@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { startGeneration, syncJob, approveAsset } from "@/lib/orchestrator";
 import { assembleProject } from "@/lib/assembleProject";
 import { generateImage } from "@/lib/imageWorker";
+import { recordCost, recordRevenue, getSummary } from "@/lib/ledger";
+import { env } from "@/lib/env";
 import { ALLOWED_SIZES, ALLOWED_TASKS } from "@/lib/types";
 import type { Scene, Job, Asset } from "@/lib/types";
 
@@ -103,6 +105,31 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { project_id: { type: "string" } },
       required: ["project_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "record_revenue",
+    description:
+      "Record a revenue (income) event in the ledger — e.g. a client payment or a sale. Use when the user says they earned/were paid money. amount_usd is in US dollars.",
+    input_schema: {
+      type: "object",
+      properties: {
+        amount_usd: { type: "number" },
+        description: { type: "string" },
+        project_id: { type: "string", description: "Optional, if tied to a project" },
+      },
+      required: ["amount_usd"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_finances",
+    description:
+      "Get the profit & loss summary (total cost, total revenue, net). Pass project_id to scope to one project, omit for the whole platform.",
+    input_schema: {
+      type: "object",
+      properties: { project_id: { type: "string" } },
       additionalProperties: false,
     },
   },
@@ -318,13 +345,65 @@ export async function runTool(
       return { final_video_url: result.url };
     }
 
+    case "record_revenue": {
+      const amount = Number(input.amount_usd);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("amount_usd must be a positive number");
+      }
+      await recordRevenue({
+        projectId: typeof input.project_id === "string" ? input.project_id : null,
+        source: "sale",
+        amountUsd: Number(amount.toFixed(4)),
+        description:
+          typeof input.description === "string" ? input.description : undefined,
+      });
+      return { recorded: true, amount_usd: Number(amount.toFixed(2)) };
+    }
+
+    case "get_finances": {
+      const summary = await getSummary(
+        typeof input.project_id === "string" ? input.project_id : undefined
+      );
+      return summary;
+    }
+
     case "generate_image": {
       // Pass through the worker's typed fields; it validates per task.
       const out = await generateImage(input);
+      const projectId =
+        typeof input.project_id === "string" ? input.project_id : null;
+      const outputs = (out.outputs ?? []).filter((o) => o.object_key && o.url);
+
+      // Persist as first-class image assets when tied to a project.
+      if (projectId && outputs.length > 0) {
+        await db.from("assets").insert(
+          outputs.map((o) => ({
+            project_id: projectId,
+            scene_id: null,
+            kind: "image",
+            media_type: "image",
+            object_key: o.object_key as string,
+            url: o.url as string,
+            size_bytes: o.size_bytes ?? null,
+            metadata: { task: out.task, ...(out.metadata ?? {}) },
+          }))
+        );
+      }
+
+      // Record estimated cost (flat per image).
+      const count = Math.max(1, outputs.length);
+      await recordCost({
+        projectId,
+        source: "image_generation",
+        amountUsd: Number((count * env.imageCostUsd()).toFixed(4)),
+        description: `${out.task} (${count} image${count > 1 ? "s" : ""})`,
+        metadata: { task: out.task },
+      });
+
       return {
         task: out.task,
         url: out.url,
-        images: (out.outputs ?? []).map((o) => o.url).filter(Boolean),
+        images: outputs.map((o) => o.url),
         seed: (out.metadata as { seed?: unknown } | undefined)?.seed,
       };
     }

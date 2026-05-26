@@ -21,7 +21,9 @@ export type JobStatus =
   | "timed_out"
   | "canceled";
 
-export type AssetKind = "clip" | "final";
+export type AssetKind = "clip" | "final" | "image";
+
+export type LedgerKind = "cost" | "revenue";
 
 export const ALLOWED_SIZES = [
   "1280*704",
@@ -66,6 +68,7 @@ export interface Job {
   project_id: string;
   scene_id: string;
   runpod_job_id: string | null;
+  worker_type: string;
   status: JobStatus;
   attempt: number;
   params: Record<string, unknown>;
@@ -84,6 +87,7 @@ export interface Asset {
   scene_id: string | null;
   job_id: string | null;
   kind: AssetKind;
+  media_type: string;
   object_key: string;
   url: string | null;
   url_type: string | null;
@@ -91,4 +95,21 @@ export interface Asset {
   duration_seconds: number | null;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  project_id: string | null;
+  kind: LedgerKind;
+  source: string;
+  amount_usd: number;
+  description: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface LedgerSummary {
+  cost: number;
+  revenue: number;
+  net: number;
 }

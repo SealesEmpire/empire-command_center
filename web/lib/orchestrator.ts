@@ -7,6 +7,7 @@ import {
   type WorkerOutput,
 } from "./runpod";
 import { freshSignedUrl } from "./storage";
+import { recordCost } from "./ledger";
 import { env } from "./env";
 import type { Job, Scene, Asset } from "./types";
 
@@ -215,6 +216,21 @@ async function finalizeSuccess(
     .single<Asset>();
 
   await db.from("scenes").update({ status: "generated" }).eq("id", job.scene_id);
+
+  // Record estimated GPU cost based on the worker's reported render time.
+  const elapsed = Number(
+    (output.metadata as { elapsed_seconds?: unknown } | undefined)?.elapsed_seconds
+  );
+  if (Number.isFinite(elapsed) && elapsed > 0) {
+    const amount = (elapsed / 3600) * env.gpuHourlyRateUsd();
+    await recordCost({
+      projectId: job.project_id,
+      source: "video_generation",
+      amountUsd: Number(amount.toFixed(4)),
+      description: `Clip render (${Math.round(elapsed)}s)`,
+      metadata: { job_id: job.id, scene_id: job.scene_id, elapsed_seconds: elapsed },
+    });
+  }
 
   return { job: { ...job, status: "completed" }, asset: asset ?? undefined };
 }

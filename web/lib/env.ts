@@ -35,4 +35,8 @@ export const env = {
   }),
 
   maxGenerationAttempts: () => Number(optional("MAX_GENERATION_ATTEMPTS", "3")),
+
+  // Cost estimation for the ledger.
+  gpuHourlyRateUsd: () => Number(optional("GPU_HOURLY_RATE_USD", "0.8")),
+  imageCostUsd: () => Number(optional("IMAGE_COST_USD", "0.01")),
 };
