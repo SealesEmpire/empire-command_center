@@ -24,6 +24,7 @@ client work, campaigns, and (carefully) trading — making it **self-sustaining*
 | GPU job pattern (validate → job → asset URL → `error_code`) | ✅ | `wan22-runpod-worker/` |
 | **Bot #1 — Video** (WAN 2.2) | ✅ | `wan22-runpod-worker/` |
 | **Bot #2 — Image** (txt2img/img2img/inpaint/faceswap) | ✅ | `image-runpod-worker/` |
+| **Manager bot** (Claude Opus 4.7, text-first) — drives the pipeline via tools | ✅ | `web/lib/agent/`, `web/app/api/agent`, `/manager` |
 | Orchestrator API + retry/state machine | ✅ | `web/lib/orchestrator.ts`, `web/app/api/**` |
 | Dashboard (scene workflow, edit/reorder/generate-all) | ✅ | `web/app`, `web/components` |
 | Postgres schema (projects/scenes/jobs/assets) | ✅ | `supabase/migrations/0001_init.sql` |
@@ -204,8 +205,9 @@ Two halves: **control cost**, **generate revenue**, **measure both in the ledger
 - *Needed:* ElevenLabs + Suno/Stable Audio keys, new worker, assembler audio track.
 
 **Phase 3 — Manager bot + voice**
-- [ ] Agent route with tools = orchestrator; text chat first, then voice wrapper.
-- *Needed:* Anthropic API key, STT/TTS providers, approval-gate UI.
+- [x] Agent route with tools = orchestrator; **text chat (done)** at `/manager`.
+- [ ] Voice wrapper (STT in → Manager → TTS out) + streaming UI + approval gate.
+- *Needed:* `ANTHROPIC_API_KEY` (done — text), STT/TTS providers (voice).
 
 **Phase 4 — Money layer**
 - [ ] `ledger` + cost caps + Stripe billing + P&L view.

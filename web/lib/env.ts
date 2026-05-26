@@ -18,6 +18,8 @@ export const env = {
   runpodApiKey: () => required("RUNPOD_API_KEY"),
   runpodEndpointId: () => required("RUNPOD_ENDPOINT_ID"),
 
+  anthropicApiKey: () => required("ANTHROPIC_API_KEY"),
+
   s3: () => ({
     endpoint: required("S3_ENDPOINT_URL"),
     accessKeyId: required("S3_ACCESS_KEY_ID"),

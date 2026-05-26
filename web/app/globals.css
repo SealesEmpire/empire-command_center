@@ -263,6 +263,11 @@ label {
   padding: 48px 0;
 }
 
+.msg-user {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
 .spinner {
   display: inline-block;
   width: 14px;

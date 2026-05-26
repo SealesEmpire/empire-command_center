@@ -18,6 +18,14 @@ export default function RootLayout({
           <a href="/" className="brand">
             EMPIRE<span>COMMAND CENTER</span>
           </a>
+          <nav className="row" style={{ marginLeft: "auto", gap: 18 }}>
+            <a href="/" className="muted">
+              Projects
+            </a>
+            <a href="/manager" className="muted">
+              Manager bot
+            </a>
+          </nav>
         </header>
         <main className="container">{children}</main>
       </body>
