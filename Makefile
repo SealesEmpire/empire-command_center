@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help web-install web-dev web-build web-check worker-test worker-build
+.PHONY: help web-install web-dev web-build web-check worker-test video-build image-build
 
 help: ## Show this help
 	@echo "Empire Command Center — common tasks"
@@ -19,8 +19,12 @@ web-build: ## Production build of the web app
 web-check: ## Typecheck the web app
 	cd web && npx tsc --noEmit
 
-worker-test: ## Run worker validation tests (no GPU)
+worker-test: ## Run all worker validation tests (no GPU)
 	cd wan22-runpod-worker && MODEL_DIR=/tmp python3 test_local.py
+	cd image-runpod-worker && MODEL_DIR=/tmp python3 test_local.py
 
-worker-build: ## Build & push the worker image. Override tag: make worker-build TAG=v1
+video-build: ## Build & push the video worker. Override tag: make video-build TAG=v1
 	cd wan22-runpod-worker && ./build.sh $(TAG)
+
+image-build: ## Build & push the image worker. Override tag: make image-build TAG=v1
+	cd image-runpod-worker && ./build.sh $(TAG)

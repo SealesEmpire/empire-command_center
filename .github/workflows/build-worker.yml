@@ -1,15 +1,18 @@
-name: Build WAN worker
+name: Build workers
 
-# Builds the RunPod worker image and pushes it to GitHub Container Registry
-# (ghcr.io). The package inherits the repo's visibility — since this repo is
-# private, the image is private too. No registry secrets needed: the built-in
-# GITHUB_TOKEN authenticates the push.
+# Builds each RunPod worker ("bot") image and pushes it to GitHub Container
+# Registry (ghcr.io), private (inherits repo visibility). No registry secrets —
+# the built-in GITHUB_TOKEN authenticates the push.
+#
+# Add a new bot by appending one entry to the matrix below and adding its dir to
+# the paths filter.
 
 on:
   push:
     branches: [main, "claude/**"]
     paths:
       - "wan22-runpod-worker/**"
+      - "image-runpod-worker/**"
       - ".github/workflows/build-worker.yml"
   workflow_dispatch:
     inputs:
@@ -22,25 +25,28 @@ permissions:
   contents: read
   packages: write
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/wan22-runpod-worker
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        worker:
+          - { dir: wan22-runpod-worker, name: wan22-runpod-worker }
+          - { dir: image-runpod-worker, name: image-runpod-worker }
     steps:
       - uses: actions/checkout@v4
 
-      # The CUDA/PyTorch base image is large; reclaim space the runner doesn't
-      # need so the build can't fail on a full disk.
       - name: Free up disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
           df -h /
 
-      - name: Lowercase image name
+      - name: Resolve image name
         id: img
-        run: echo "image=${IMAGE,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          owner="${{ github.repository_owner }}"
+          echo "image=ghcr.io/${owner,,}/${{ matrix.worker.name }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -66,26 +72,23 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
-          context: wan22-runpod-worker
+          context: ${{ matrix.worker.dir }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.worker.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.worker.name }}
 
-      # Surface the pushed tags + the RunPod field value in the run summary so
-      # you can copy-paste without digging through logs.
       - name: Summary
         run: |
           {
-            echo "### WAN worker image pushed"
+            echo "### ${{ matrix.worker.name }} pushed"
             echo ""
-            echo "Private image on \`ghcr.io\`. Pushed tags:"
+            echo "Private image on \`ghcr.io\`. Tags:"
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
             echo '```'
-            echo "Paste one of the tags above into the RunPod endpoint **Container Image** field."
-            echo ""
-            echo "> Private pull: in RunPod add a GHCR credential — username = your GitHub username, password = a PAT with \`read:packages\`."
+            echo "Paste one tag into the worker's RunPod endpoint **Container Image** field."
+            echo "> Private pull: add a GHCR credential in RunPod (user = GitHub username, password = PAT with \`read:packages\`)."
           } >> "$GITHUB_STEP_SUMMARY"

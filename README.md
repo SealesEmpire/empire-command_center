@@ -20,9 +20,11 @@ clips into a final MP4 — all from one dashboard.
 
 ```
 empire-command_center/
-├── wan22-runpod-worker/     # GPU execution layer — RunPod serverless worker
+├── wan22-runpod-worker/     # bot #1 — video generation (WAN 2.2) on RunPod
+├── image-runpod-worker/     # bot #2 — image gen/edit/faceswap (SDXL) on RunPod
 ├── supabase/migrations/     # Postgres schema (projects/scenes/jobs/assets)
 ├── web/                     # Next.js orchestrator API + dashboard + ffmpeg assembler
+├── BLUEPRINT.md             # roadmap to the full multi-modal, voice-driven platform
 └── README.md                # you are here
 ```
 
@@ -146,7 +148,11 @@ errors auto-retry up to the cap.
 
 ## What's next
 
+See **[BLUEPRINT.md](BLUEPRINT.md)** for the full roadmap (manager bot, voice,
+audio/build/social/trading bots, and the self-sustaining economics layer). Near-term:
+
 - End-user auth (Supabase Auth) + per-user RLS policies
-- Cost guardrails (per-project GPU spend caps) in the orchestrator
+- Cost guardrails (per-project GPU spend caps) + a `ledger` table
+- Wire **bot #2 (image)** into the dashboard via a `worker_type` registry
 - Audio track / music bed in the assembler
-- Image conditioning (i2v) upload flow in the dashboard
+- Manager bot (Claude agent) exposing the orchestrator as tools
