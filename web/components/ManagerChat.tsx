@@ -63,9 +63,14 @@ export default function ManagerChat() {
   return (
     <div className="stack" style={{ maxWidth: 820, margin: "0 auto" }}>
       <div>
-        <a href="/" className="muted" style={{ fontSize: 12 }}>
-          ← Dashboard
-        </a>
+        <div className="row spread">
+          <a href="/" className="muted" style={{ fontSize: 12 }}>
+            ← Dashboard
+          </a>
+          <a href="/manager/settings" className="muted" style={{ fontSize: 12 }}>
+            Knowledge ⚙
+          </a>
+        </div>
         <h1 style={{ marginTop: 6 }}>Manager bot</h1>
         <p className="muted">
           Talk to the platform. It plans and drives the video pipeline for you —

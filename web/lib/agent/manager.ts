@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
+import { getManagerInstructions } from "@/lib/managerSettings";
 import { TOOLS, runTool } from "./tools";
 
 const MODEL = "claude-opus-4-7";
@@ -25,10 +26,15 @@ Rules:
 - Be concise. Confirm what you did and what the next step is. Report ids/urls you get back briefly.
 - Never invent ids or urls — only use values returned by tools.`;
 
-function systemPrompt(): string {
-  const extra = env.managerExtraInstructions().trim();
-  return extra
-    ? `${BASE_SYSTEM_PROMPT}\n\n## Operator instructions (authoritative)\n${extra}`
+// Compose the system prompt from the base + operator knowledge. Knowledge comes
+// from two places: the dashboard-editable DB setting and the optional env var.
+// Both are appended as authoritative operator instructions.
+async function buildSystemPrompt(): Promise<string> {
+  const dbInstr = (await getManagerInstructions()).trim();
+  const envInstr = env.managerExtraInstructions().trim();
+  const operator = [dbInstr, envInstr].filter(Boolean).join("\n\n");
+  return operator
+    ? `${BASE_SYSTEM_PROMPT}\n\n## Operator instructions (authoritative)\n${operator}`
     : BASE_SYSTEM_PROMPT;
 }
 
@@ -60,6 +66,7 @@ export async function runManagerTurn(
 ): Promise<ManagerResult> {
   const messages: Anthropic.MessageParam[] = [...history];
   const toolEvents: ToolEvent[] = [];
+  const sys = await buildSystemPrompt();
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const response = await client().messages.create({
@@ -68,7 +75,7 @@ export async function runManagerTurn(
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system: [
-        { type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } },
+        { type: "text", text: sys, cache_control: { type: "ephemeral" } },
       ],
       tools: TOOLS,
       messages,
