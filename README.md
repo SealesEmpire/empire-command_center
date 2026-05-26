@@ -25,8 +25,12 @@ empire-command_center/
 ├── supabase/migrations/     # Postgres schema (projects/scenes/jobs/assets)
 ├── web/                     # Next.js orchestrator API + dashboard + ffmpeg assembler
 ├── BLUEPRINT.md             # roadmap to the full multi-modal, voice-driven platform
+├── LAUNCH.md                # ← first-launch checklist: go from built to live
 └── README.md                # you are here
 ```
+
+> **Going live?** Start with [LAUNCH.md](LAUNCH.md) — a click-by-click runbook to
+> a working system that generates a real video.
 
 ## How it works
 
