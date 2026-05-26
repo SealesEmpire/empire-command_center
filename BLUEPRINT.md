@@ -206,8 +206,10 @@ Two halves: **control cost**, **generate revenue**, **measure both in the ledger
 
 **Phase 3 — Manager bot + voice**
 - [x] Agent route with tools = orchestrator; **text chat (done)** at `/manager`.
-- [ ] Voice wrapper (STT in → Manager → TTS out) + streaming UI + approval gate.
-- *Needed:* `ANTHROPIC_API_KEY` (done — text), STT/TTS providers (voice).
+- [x] UI-editable knowledge (`/manager/settings`, Supabase `manager_settings`).
+- [x] **Voice (done)** — browser Web Speech API: mic dictation + spoken replies.
+- [ ] Optional: upgrade to Deepgram/ElevenLabs for higher-quality, cross-browser
+      voice; streaming token-by-token UI; approval gate for irreversible actions.
 
 **Phase 4 — Money layer**
 - [ ] `ledger` + cost caps + Stripe billing + P&L view.

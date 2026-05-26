@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSpeech } from "@/lib/useSpeech";
 
 interface ToolEvent {
   name: string;
@@ -25,11 +26,38 @@ export default function ManagerChat() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [speakReplies, setSpeakReplies] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeech();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
+
+  useEffect(() => {
+    setSpeakReplies(localStorage.getItem("ecc.speakReplies") === "1");
+  }, []);
+
+  function toggleSpeak() {
+    const next = !speakReplies;
+    setSpeakReplies(next);
+    localStorage.setItem("ecc.speakReplies", next ? "1" : "0");
+    if (!next) speech.cancelSpeech();
+  }
+
+  function toggleMic() {
+    if (speech.listening) {
+      speech.stopListening();
+      return;
+    }
+    speech.listen((text, isFinal) => {
+      setInput(text);
+      if (isFinal && text) {
+        speech.stopListening();
+        send(text);
+      }
+    });
+  }
 
   async function send(text: string) {
     const message = text.trim();
@@ -53,6 +81,7 @@ export default function ManagerChat() {
         ...cur,
         { role: "assistant", content: data.reply, tools: data.toolEvents },
       ]);
+      if (speakReplies) speech.speak(data.reply);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -67,9 +96,20 @@ export default function ManagerChat() {
           <a href="/" className="muted" style={{ fontSize: 12 }}>
             ← Dashboard
           </a>
-          <a href="/manager/settings" className="muted" style={{ fontSize: 12 }}>
-            Knowledge ⚙
-          </a>
+          <div className="row" style={{ gap: 14 }}>
+            {speech.support.tts && (
+              <button
+                className="btn-ghost btn-xs"
+                onClick={toggleSpeak}
+                title="Read the Manager's replies aloud"
+              >
+                {speakReplies ? "🔊 Voice on" : "🔇 Voice off"}
+              </button>
+            )}
+            <a href="/manager/settings" className="muted" style={{ fontSize: 12 }}>
+              Knowledge ⚙
+            </a>
+          </div>
         </div>
         <h1 style={{ marginTop: 6 }}>Manager bot</h1>
         <p className="muted">
@@ -145,9 +185,23 @@ export default function ManagerChat() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Tell the Manager what to build…"
+          placeholder={
+            speech.listening ? "Listening…" : "Tell the Manager what to build…"
+          }
           disabled={busy}
         />
+        {speech.support.stt && (
+          <button
+            type="button"
+            className={speech.listening ? "btn-success" : "btn-ghost"}
+            onClick={toggleMic}
+            disabled={busy}
+            title="Dictate (click, speak, it sends automatically)"
+            aria-label="Dictate"
+          >
+            {speech.listening ? "● Rec" : "🎤"}
+          </button>
+        )}
         <button className="btn-primary" disabled={busy || !input.trim()}>
           Send
         </button>
