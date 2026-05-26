@@ -17,8 +17,12 @@ export const env = {
 
   runpodApiKey: () => required("RUNPOD_API_KEY"),
   runpodEndpointId: () => required("RUNPOD_ENDPOINT_ID"),
+  runpodImageEndpointId: () => required("RUNPOD_IMAGE_ENDPOINT_ID"),
 
   anthropicApiKey: () => required("ANTHROPIC_API_KEY"),
+  // Optional extra knowledge/instructions appended to the Manager bot's system
+  // prompt — your way to teach it brand voice, rules, defaults, etc.
+  managerExtraInstructions: () => optional("MANAGER_EXTRA_INSTRUCTIONS"),
 
   s3: () => ({
     endpoint: required("S3_ENDPOINT_URL"),

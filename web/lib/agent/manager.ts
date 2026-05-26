@@ -5,21 +5,32 @@ import { TOOLS, runTool } from "./tools";
 const MODEL = "claude-opus-4-7";
 const MAX_TOOL_ITERATIONS = 16;
 
-const SYSTEM_PROMPT = `You are the Manager bot for Empire Command Center — an AI video generation platform.
+const BASE_SYSTEM_PROMPT = `You are the Manager bot for Empire Command Center — an AI media generation platform.
 
-You operate the platform on the user's behalf by calling tools. The pipeline is:
+You operate the platform on the user's behalf by calling tools.
+
+VIDEO pipeline:
 1. A PROJECT contains ordered SCENES (one shot each).
 2. Each scene has a text PROMPT. Generating a scene runs it on a GPU worker (WAN 2.2) and produces a clip ("take"). A scene can have multiple takes.
 3. The user APPROVES one take per scene.
 4. Once every scene has an approved take, the project is ASSEMBLED into a final stitched video.
 
+IMAGES (separate from video): use generate_image for stills, thumbnails, concept art, edits, and face swaps. It runs synchronously and returns image url(s) immediately — there is no approve/assemble step for standalone images.
+
 Rules:
-- Generation is asynchronous and takes minutes. After generate_scene, tell the user it's running; use check_jobs to poll — do not claim a clip exists until check_jobs or get_project shows one.
+- Video generation is asynchronous and takes minutes. After generate_scene, tell the user it's running; use check_jobs to poll — do not claim a clip exists until check_jobs or get_project shows one.
 - Always inspect state with get_project before approving or assembling so you reference real scene/asset ids.
 - Only assemble when every scene has an approved take. If some don't, say which are missing.
-- When writing scene prompts, make them cinematic and specific (camera motion, lighting, mood) unless the user gave exact wording.
-- Be concise. Confirm what you did and what the next step is. When you create/generate things, report the ids briefly.
+- When writing prompts, make them cinematic and specific (camera motion, lighting, mood) unless the user gave exact wording.
+- Be concise. Confirm what you did and what the next step is. Report ids/urls you get back briefly.
 - Never invent ids or urls — only use values returned by tools.`;
+
+function systemPrompt(): string {
+  const extra = env.managerExtraInstructions().trim();
+  return extra
+    ? `${BASE_SYSTEM_PROMPT}\n\n## Operator instructions (authoritative)\n${extra}`
+    : BASE_SYSTEM_PROMPT;
+}
 
 export interface ToolEvent {
   name: string;
@@ -57,7 +68,7 @@ export async function runManagerTurn(
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system: [
-        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } },
       ],
       tools: TOOLS,
       messages,

@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase";
 import { startGeneration, syncJob, approveAsset } from "@/lib/orchestrator";
 import { assembleProject } from "@/lib/assembleProject";
+import { generateImage } from "@/lib/imageWorker";
 import { ALLOWED_SIZES, ALLOWED_TASKS } from "@/lib/types";
 import type { Scene, Job, Asset } from "@/lib/types";
 
@@ -102,6 +103,33 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { project_id: { type: "string" } },
       required: ["project_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "generate_image",
+    description:
+      "Generate or edit an IMAGE on the image GPU worker (bot #2). Runs synchronously (seconds) and returns image url(s). Tasks: 'txt2img' (prompt→image), 'img2img' (image+prompt→reimagined image), 'inpaint' (image+mask+prompt→edited region), 'faceswap' (swap source_image's face onto target_image). Image inputs are URLs. This is separate from video scenes — use it for stills, thumbnails, concept art, edits, and face swaps.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task: {
+          type: "string",
+          enum: ["txt2img", "img2img", "inpaint", "faceswap"],
+        },
+        prompt: { type: "string", description: "Required except for faceswap" },
+        negative_prompt: { type: "string" },
+        image: { type: "string", description: "Input image URL (img2img/inpaint)" },
+        mask: { type: "string", description: "Mask image URL (inpaint)" },
+        source_image: { type: "string", description: "Face source URL (faceswap)" },
+        target_image: { type: "string", description: "Target image URL (faceswap)" },
+        width: { type: "integer" },
+        height: { type: "integer" },
+        num_images: { type: "integer", description: "1-4" },
+        seed: { type: "integer" },
+        project_id: { type: "string", description: "Optional, for storage path tracing" },
+      },
+      required: ["task"],
       additionalProperties: false,
     },
   },
@@ -288,6 +316,17 @@ export async function runTool(
     case "assemble_project": {
       const result = await assembleProject(String(input.project_id ?? ""));
       return { final_video_url: result.url };
+    }
+
+    case "generate_image": {
+      // Pass through the worker's typed fields; it validates per task.
+      const out = await generateImage(input);
+      return {
+        task: out.task,
+        url: out.url,
+        images: (out.outputs ?? []).map((o) => o.url).filter(Boolean),
+        seed: (out.metadata as { seed?: unknown } | undefined)?.seed,
+      };
     }
 
     default:
