@@ -25,6 +25,7 @@ client work, campaigns, and (carefully) trading — making it **self-sustaining*
 | **Bot #1 — Video** (WAN 2.2) | ✅ | `wan22-runpod-worker/` |
 | **Bot #2 — Image** (txt2img/img2img/inpaint/faceswap) | ✅ | `image-runpod-worker/` |
 | **Bot #3 — Audio** (music / voiceover) + assembler audio mux | ✅ | `audio-runpod-worker/`, `web/lib/assembler.ts` |
+| **Social bot** (campaign copy per platform; publish-kit, copy-to-clipboard) | ✅ | `web/lib/social.ts`, `/social`, Manager `save_social_post` |
 | **Manager bot** (Claude Opus 4.7, text-first) — drives the pipeline via tools | ✅ | `web/lib/agent/`, `web/app/api/agent`, `/manager` |
 | Orchestrator API + retry/state machine | ✅ | `web/lib/orchestrator.ts`, `web/app/api/**` |
 | Dashboard (scene workflow, edit/reorder/generate-all) | ✅ | `web/app`, `web/components` |
@@ -220,7 +221,10 @@ Two halves: **control cost**, **generate revenue**, **measure both in the ledger
 - *Needed:* Stripe account, ledger migration, cost-estimate functions per bot.
 
 **Phase 5 — Build + Social bots**
-- [ ] Codegen→deploy bot (Vercel/Cloudflare MCP already wired); social bot with OAuth + approval gate.
+- [x] **Social bot v1 (done)** — per-platform campaign copy + hashtags, saved to a
+      library with copy-to-clipboard; Manager writes the copy.
+- [ ] Social auto-posting via platform OAuth + approval gate (deferred, ToS-sensitive).
+- [ ] Codegen→deploy Build bot (Vercel/Cloudflare MCP already wired).
 
 **Phase 6 — Growth + Trading**
 - [ ] Referral/affiliate campaigns; **paper-trading** bot with strict guardrails before any live capital.

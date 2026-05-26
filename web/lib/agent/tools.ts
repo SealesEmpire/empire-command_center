@@ -6,6 +6,7 @@ import { generateImage } from "@/lib/imageWorker";
 import { generateAudio } from "@/lib/audioWorker";
 import { recordCost, recordRevenue, getSummary } from "@/lib/ledger";
 import { assertWithinBudget, getBudgetState, setCap } from "@/lib/budget";
+import { createPost, listPosts } from "@/lib/social";
 import { env } from "@/lib/env";
 import { ALLOWED_SIZES, ALLOWED_TASKS } from "@/lib/types";
 import type { Scene, Job, Asset } from "@/lib/types";
@@ -167,6 +168,39 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { monthly_cap_usd: { type: "number" } },
       required: ["monthly_cap_usd"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "save_social_post",
+    description:
+      "Save a platform-ready social post you wrote (caption/copy + hashtags) to the campaign library. Write the copy yourself, tailored to the platform's style and length, then call this once per platform. Optionally schedule it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        platform: {
+          type: "string",
+          description: "x | instagram | tiktok | youtube | linkedin | facebook",
+        },
+        content: { type: "string", description: "The post copy/caption" },
+        hashtags: { type: "array", items: { type: "string" } },
+        scheduled_for: {
+          type: "string",
+          description: "Optional ISO 8601 datetime to schedule the post",
+        },
+        project_id: { type: "string", description: "Optional, link to a project" },
+      },
+      required: ["platform", "content"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "list_social_posts",
+    description:
+      "List saved social posts. Pass project_id to scope to one project, omit for all.",
+    input_schema: {
+      type: "object",
+      properties: { project_id: { type: "string" } },
       additionalProperties: false,
     },
   },
@@ -428,6 +462,36 @@ export async function runTool(
       }
       await setCap(cap);
       return { monthly_cap_usd: cap === 0 ? "unlimited" : Number(cap.toFixed(2)) };
+    }
+
+    case "save_social_post": {
+      const post = await createPost({
+        projectId: typeof input.project_id === "string" ? input.project_id : null,
+        platform: String(input.platform ?? "").trim(),
+        content: String(input.content ?? "").trim(),
+        hashtags: Array.isArray(input.hashtags)
+          ? (input.hashtags as unknown[]).filter((h) => typeof h === "string") as string[]
+          : [],
+        scheduledFor:
+          typeof input.scheduled_for === "string" ? input.scheduled_for : null,
+      });
+      return { post: { id: post.id, platform: post.platform, status: post.status } };
+    }
+
+    case "list_social_posts": {
+      const posts = await listPosts(
+        typeof input.project_id === "string" ? input.project_id : undefined
+      );
+      return {
+        posts: posts.map((p) => ({
+          id: p.id,
+          platform: p.platform,
+          content: p.content,
+          hashtags: p.hashtags,
+          status: p.status,
+          scheduled_for: p.scheduled_for,
+        })),
+      };
     }
 
     case "generate_image": {

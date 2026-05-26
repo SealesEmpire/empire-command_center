@@ -113,3 +113,16 @@ export interface LedgerSummary {
   revenue: number;
   net: number;
 }
+
+export type SocialStatus = "draft" | "scheduled" | "posted";
+
+export interface SocialPost {
+  id: string;
+  project_id: string | null;
+  platform: string;
+  content: string;
+  hashtags: string[];
+  status: SocialStatus;
+  scheduled_for: string | null;
+  created_at: string;
+}

@@ -22,6 +22,9 @@ export default function RootLayout({
             <a href="/" className="muted">
               Projects
             </a>
+            <a href="/social" className="muted">
+              Campaigns
+            </a>
             <a href="/manager" className="muted">
               Manager bot
             </a>
