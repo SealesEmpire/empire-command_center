@@ -1,162 +1,145 @@
 # Empire Command Center
 
-Scene-based AI video generation platform. Write a prompt per scene, generate
-clips on a serverless GPU, approve the take you like, and assemble the approved
-clips into a final MP4 — all from one dashboard.
+An AI media production platform you run by conversation. Describe what you want —
+in text or by voice — and a **Manager bot** plans the work and drives a fleet of
+specialist GPU bots to produce it: cinematic **video**, **images** (and face
+swaps), **music & voiceover**, a stitched-and-scored **final film**, and
+ready-to-publish **social campaigns** — while tracking spend, revenue, and a
+budget cap the whole time.
+
+It's a content **factory + distribution + money layer** in one dashboard, built
+around a single repeatable pattern so new capabilities slot in cleanly.
 
 ```
-┌─────────────┐     ┌──────────────────────┐     ┌─────────────────────┐
-│  Dashboard  │────▶│  Next.js Orchestrator │────▶│  RunPod (WAN 2.2)   │
-│  (web/)     │◀────│  + state machine      │◀────│  serverless GPU     │
-└─────────────┘     └──────────┬───────────┘     └──────────┬──────────┘
-                               │                            │ upload mp4
-                    ┌──────────▼───────────┐     ┌──────────▼──────────┐
-                    │  Supabase (Postgres) │     │  R2 / S3 storage    │
-                    │  projects/scenes/... │     │  clips + final mp4  │
-                    └──────────────────────┘     └─────────────────────┘
+        🎙️ talk or type
+              │
+      ┌───────▼─────────┐   plans, routes, narrates (and speaks back)
+      │   MANAGER BOT   │   Claude Opus 4.7 · tools = orchestrator actions
+      └───────┬─────────┘
+              │ creates jobs
+   ┌──────────┼───────────────────────────┐
+   ▼          ▼            ▼               ▼
+ Video      Image        Audio          Social
+ (WAN 2.2)  (SDXL +      (MusicGen      (per-platform
+            faceswap)    + Bark)         campaign copy)
+   └──────────┴────────────┴───── RunPod serverless GPUs ──┘
+              │ assets (mp4 / png / wav)
+   ┌──────────▼───────────┐     ┌──────────────────────┐
+   │  Supabase (Postgres) │     │   R2 / S3 storage     │
+   │  projects · scenes · │     │   clips · images ·    │
+   │  jobs · assets ·     │     │   audio · final mp4   │
+   │  ledger · budget ·   │     └──────────────────────┘
+   │  social · settings   │
+   └──────────────────────┘
 ```
+
+---
+
+## What it does
+
+| Capability | What it is |
+|---|---|
+| 🎬 **Video** (bot #1) | Scene-based generation on WAN 2.2. Each scene is a prompt; generate multiple takes, approve one, assemble approved takes into a final MP4. |
+| 🖼️ **Image** (bot #2) | Text→image, image→image, inpaint, and **face swap** (SDXL + InsightFace). Stills, thumbnails, concept art, edits. |
+| 🔊 **Audio** (bot #3) | **Music** (MusicGen) and **voiceover** (Bark). The assembler muxes a track over the finished video. |
+| 📣 **Social** | Per-platform campaign copy + hashtags (X, IG, TikTok, YouTube, LinkedIn), saved to a library with copy-to-clipboard. |
+| 🤖 **Manager bot** | A Claude Opus 4.7 agent whose tools are the orchestrator's actions. Operate the whole platform by chat or **voice** (browser STT/TTS). |
+| 🧠 **Knowledge** | Teach the Manager your brand voice / rules from a dashboard page — no redeploy. |
+| 💰 **Money layer** | Every generation's cost is tracked; log revenue; see **Profit & Loss** everywhere; set a **monthly spend cap** that blocks runaway GPU spend. |
+
+Everything is drivable from one conversation:
+> *"Make a project, write 3 cinematic scenes for a sunrise city film, generate them,
+> approve the best takes, score it with upbeat 20-second music, assemble it, then
+> write a launch campaign for X, Instagram, and TikTok."*
+
+---
+
+## How the video pipeline works
+
+1. **Project** → a video. **Scenes** → ordered shots, each with its own prompt.
+2. **Generate** a scene → the orchestrator creates a `job`, submits it to the
+   RunPod endpoint, tracks the lifecycle. RunPod runs the model, uploads the
+   result to R2/S3, returns an `object_key`.
+3. The dashboard **polls**; on success the clip becomes an `asset` (a "take").
+   Regenerate for more takes.
+4. **Approve** the take you want per scene.
+5. **Assemble** → download approved clips in order, concatenate (and optionally
+   mux audio) with ffmpeg, upload the final MP4, link it on the project.
+
+Image and audio bots follow the **same job contract** (`validate → job → asset
+URL → structured error_code`), so the orchestrator and Manager drive all of them
+the same way. State reconciliation + retries live in `web/lib/orchestrator.ts`:
+retryable failures auto-retry up to `MAX_GENERATION_ATTEMPTS` (and respect the
+budget cap); validation/infra errors fail fast.
+
+---
 
 ## Repo layout
 
 ```
 empire-command_center/
-├── wan22-runpod-worker/     # bot #1 — video generation (WAN 2.2) on RunPod
-├── image-runpod-worker/     # bot #2 — image gen/edit/faceswap (SDXL) on RunPod
-├── supabase/migrations/     # Postgres schema (projects/scenes/jobs/assets)
-├── web/                     # Next.js orchestrator API + dashboard + ffmpeg assembler
-├── BLUEPRINT.md             # roadmap to the full multi-modal, voice-driven platform
-├── LAUNCH.md                # ← first-launch checklist: go from built to live
+├── wan22-runpod-worker/     # bot #1 — video (WAN 2.2) on RunPod
+├── image-runpod-worker/     # bot #2 — image gen/edit/faceswap (SDXL)
+├── audio-runpod-worker/     # bot #3 — music + voiceover (MusicGen / Bark)
+├── supabase/migrations/     # schema: projects/scenes/jobs/assets/ledger/budget/social/settings
+├── web/                     # Next.js orchestrator API + dashboard + Manager agent + ffmpeg assembler
+├── .github/workflows/       # CI: matrix build of all worker images → private GHCR
+├── BLUEPRINT.md             # full long-term roadmap & architecture
+├── LAUNCH.md                # ← click-by-click first-launch checklist
 └── README.md                # you are here
 ```
 
-> **Going live?** Start with [LAUNCH.md](LAUNCH.md) — a click-by-click runbook to
-> a working system that generates a real video.
+**Dashboard pages** (`web/app`): Projects (`/`), project scene board, **Manager
+bot** (`/manager`) + Knowledge (`/manager/settings`), and **Campaigns** (`/social`).
 
-## How it works
+## Tech stack
 
-1. **Project** → a video. **Scenes** → ordered shots, each with its own prompt.
-2. **Generate** a scene → the orchestrator creates a `job`, submits it to the
-   RunPod endpoint, and tracks the lifecycle. RunPod runs WAN 2.2, uploads the
-   MP4 to R2/S3, and returns an `object_key`.
-3. The dashboard **polls** the job; on success the clip becomes an `asset` (a
-   "take"). Regenerate to get more takes.
-4. **Approve** the take you want per scene.
-5. **Assemble** → the orchestrator downloads every approved clip in scene order,
-   concatenates them with ffmpeg, uploads the final MP4, and links it on the
-   project.
+- **Frontend/API:** Next.js 15 (App Router), React 19, TypeScript
+- **Agent:** Anthropic SDK, Claude Opus 4.7 (tool use + adaptive thinking)
+- **DB/Auth:** Supabase (Postgres, RLS-ready)
+- **Storage:** Cloudflare R2 / any S3-compatible
+- **GPU:** RunPod serverless (scale-to-zero), one endpoint per bot
+- **Workers:** Python + the model stacks (WAN 2.2, diffusers/SDXL, audiocraft/transformers)
+- **Assembly:** ffmpeg (bundled via `ffmpeg-static`)
 
-### State machine & retries
+## Getting started
 
-`web/lib/orchestrator.ts` owns the reconciliation. `syncJob()` maps RunPod
-status → our `job_status`, persists clips, and on a *retryable* failure
-(`SUBPROCESS_ERROR`, `NO_OUTPUT`, `GENERATION_FAILED`, `TIMEOUT`) auto-retries up
-to `MAX_GENERATION_ATTEMPTS`. `INVALID_INPUT` / `MODEL_NOT_FOUND` fail fast.
+- **Run it live:** follow **[LAUNCH.md](LAUNCH.md)** — storage → model → RunPod
+  endpoint → web app → first generated video, with a checkpoint at every step.
+- **Local dev:** `cd web && cp .env.example .env.local` (fill values) →
+  `npm install && npm run dev`. Common tasks via `make` (`make help`).
 
----
-
-# Deployment runbook
-
-You'll wire up four things: **storage → model → RunPod endpoint → Supabase → web app.**
-
-## 1. Storage bucket (Cloudflare R2 recommended)
-
-1. Create an R2 bucket (e.g. `empire-clips`).
-2. Create an R2 API token (Object Read & Write). Note the Access Key ID + Secret.
-3. Your S3 endpoint is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`.
-4. (Optional) Enable public access to get a `https://pub-XXXX.r2.dev` base URL —
-   set it as `S3_PUBLIC_BASE_URL` everywhere. Otherwise the app uses signed URLs.
-
-## 2. Preload the WAN 2.2 model
-
-Follow [`wan22-runpod-worker/README.md`](wan22-runpod-worker/README.md) **Step 1**:
-create a RunPod Network Volume, attach it to a temp pod, run
-`scripts/download_model.py`. ~15 GB, one time.
-
-## 3. Build & deploy the RunPod worker
-
-`wan22-runpod-worker/README.md` Steps 2–4:
-- `docker build --platform linux/amd64 -t YOU/wan22-runpod-worker:latest . && docker push …`
-- Create a **Serverless Endpoint** (48 GB+ GPU), attach the volume at
-  `/runpod-volume`, set the env vars (incl. the **same** `S3_*` creds from step 1).
-- Test with the healthcheck curl. Confirm `model_dir_exists` and
-  `storage_configured` are both `true`.
-- Note your **endpoint ID** and create a **RunPod API key**.
-
-## 4. Supabase
-
-1. Create a Supabase project. Grab the **Project URL** and the **service_role**
-   key (Settings → API).
-2. Apply the schema:
-   ```bash
-   # with the Supabase CLI, linked to your project:
-   supabase db push
-   # — or — paste supabase/migrations/0001_init.sql into the SQL editor.
-   ```
-   The schema enables RLS with no public policies; the server uses the
-   service-role key (which bypasses RLS). Add user-scoped policies later if you
-   add multi-tenant auth.
-
-## 5. Web app (orchestrator + dashboard)
-
-```bash
-cd web
-cp .env.example .env.local   # fill every value (see below)
-npm install
-npm run dev                  # http://localhost:3000
-```
-
-`.env.local` values:
-
-| Var | From |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key (server only) |
-| `RUNPOD_API_KEY` | RunPod API key |
-| `RUNPOD_ENDPOINT_ID` | RunPod serverless endpoint ID |
-| `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_BUCKET` | step 1 (same as worker) |
-| `S3_REGION` | `auto` for R2 |
-| `S3_PUBLIC_BASE_URL` | optional, if bucket is public |
-| `MAX_GENERATION_ATTEMPTS` | retry cap, default 3 |
-
-### Deploy the web app
-
-**Vercel** (fastest): import `web/`, add the env vars, deploy. ⚠️ Final-video
-**assembly runs ffmpeg in `/api/projects/[id]/assemble`** with `maxDuration=300`.
-That needs a Vercel plan allowing extended function duration, and very long
-videos may still exceed limits. For heavy assembly, deploy the web app to a
-long-lived Node host instead (**Railway / Render / Fly.io** — `npm run build`
-then `npm start`), where ffmpeg has no time ceiling.
+> **Security:** `SUPABASE_SERVICE_ROLE_KEY` and all `S3_*` secrets are
+> server-only (behind API routes, never sent to the browser). There's no
+> end-user auth yet — this is a single-operator command center; keep the
+> deployed URL private until Supabase Auth + RLS policies are added.
 
 ---
 
-## Verifying end to end
+# Add-on — Roadmap (what's left)
 
-1. Open the dashboard → **create a project**.
-2. **Add a scene** with a prompt → **Generate**. Watch the pill go
-   `generating → generated` as polling reconciles the RunPod job.
-3. **Approve** a take. Repeat for a couple of scenes.
-4. **Assemble final video** → the stitched MP4 appears on the project with a
-   download link.
+Built so far: video + image + audio bots, the Manager (text **and** voice),
+editable knowledge, the multi-modal schema, the cost/revenue **ledger** + P&L,
+the **monthly spend cap**, and the **social/campaign** layer. See
+[BLUEPRINT.md](BLUEPRINT.md) for the full picture. Remaining:
 
-If a scene fails, the card shows the worker's `error_code` + message; retryable
-errors auto-retry up to the cap.
+### Near-term
+- [ ] **End-user auth** — Supabase Auth + per-user RLS policies before any public exposure.
+- [ ] **Stripe billing** — turn revenue tracking into real invoicing / subscriptions.
+- [ ] **Image & audio in the dashboard UI** — generate them from the dashboard (not just the Manager); a media gallery view.
+- [ ] **Per-project spend caps** + per-job pre-estimate (today's cap is platform-wide, monthly).
+- [ ] **Streaming Manager replies** (token-by-token) + an **approval gate** for irreversible actions (assemble, spend, post).
 
-## Security notes
+### New bots
+- [ ] **Build bot** — codegen → deploy sites/apps/landing pages (the Vercel & Cloudflare MCPs are already available).
+- [ ] **Social auto-posting** — platform OAuth + scheduler so campaigns publish themselves (currently copy-to-clipboard only; ToS-sensitive, human-approved).
+- [ ] **Trading / Growth bot** — market-data signals and referral-link campaigns. **Paper-trade first**, hard spend caps, human confirm before any live order.
 
-- `SUPABASE_SERVICE_ROLE_KEY` and all `S3_*` secrets are **server-only** — they
-  live in `web/lib/*` behind API routes and are never sent to the browser.
-- Storage credentials are shared between the worker (uploads) and the web app
-  (downloads for assembly + re-signing URLs). Scope the token to the one bucket.
-- There is no end-user auth yet — this is a single-operator command center.
-  Add Supabase Auth + RLS policies before exposing it publicly.
+### Platform hardening
+- [ ] **Worker registry** — move RunPod endpoint IDs from env into a `workers` table the orchestrator reads.
+- [ ] **Higher-quality voice** — swap browser STT/TTS for Deepgram + ElevenLabs behind the same hook.
+- [ ] **Cross-session memory + knowledge base (RAG)** for the Manager.
+- [ ] **Observability** — structured logs + `trace_id` end-to-end, a job/cost dashboard.
+- [ ] **Real RunPod billing** — replace estimated costs with billed actuals.
 
-## What's next
-
-See **[BLUEPRINT.md](BLUEPRINT.md)** for the full roadmap (manager bot, voice,
-audio/build/social/trading bots, and the self-sustaining economics layer). Near-term:
-
-- End-user auth (Supabase Auth) + per-user RLS policies
-- Cost guardrails (per-project GPU spend caps) + a `ledger` table
-- Wire **bot #2 (image)** into the dashboard via a `worker_type` registry
-- Audio track / music bed in the assembler
-- Manager bot (Claude agent) exposing the orchestrator as tools
+_Pick any item and it can be built next._
