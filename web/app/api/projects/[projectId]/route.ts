@@ -1,8 +1,53 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { ok, notFound, serverError } from "@/lib/http";
+import { ok, badRequest, notFound, serverError } from "@/lib/http";
 import type { Scene, Asset } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const { projectId } = await params;
+    const body = await req.json().catch(() => ({}));
+    const patch: Record<string, unknown> = {};
+    if (typeof body.name === "string") {
+      const name = body.name.trim();
+      if (!name) return badRequest("name cannot be empty");
+      patch.name = name;
+    }
+    if (typeof body.description === "string") patch.description = body.description;
+    if (Object.keys(patch).length === 0) return badRequest("nothing to update");
+
+    const db = supabaseAdmin();
+    const { data, error } = await db
+      .from("projects")
+      .update(patch)
+      .eq("id", projectId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return ok({ project: data });
+  } catch (e) {
+    return serverError(e);
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const { projectId } = await params;
+    const db = supabaseAdmin();
+    const { error } = await db.from("projects").delete().eq("id", projectId);
+    if (error) throw error;
+    return ok({ deleted: true });
+  } catch (e) {
+    return serverError(e);
+  }
+}
 
 // Returns a project with its scenes, each scene's clip assets, and the latest
 // job per scene — everything the dashboard needs in one round trip.

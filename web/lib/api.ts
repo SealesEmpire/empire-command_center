@@ -20,6 +20,23 @@ export const api = {
   getProject: (id: string) =>
     fetch(`/api/projects/${id}`, { cache: "no-store" }).then(jsonOrThrow),
 
+  updateProject: (id: string, patch: Record<string, unknown>) =>
+    fetch(`/api/projects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).then(jsonOrThrow),
+
+  deleteProject: (id: string) =>
+    fetch(`/api/projects/${id}`, { method: "DELETE" }).then(jsonOrThrow),
+
+  reorderScenes: (projectId: string, sceneIds: string[]) =>
+    fetch(`/api/projects/${projectId}/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_ids: sceneIds }),
+    }).then(jsonOrThrow),
+
   createScene: (payload: Record<string, unknown>) =>
     fetch("/api/scenes", {
       method: "POST",

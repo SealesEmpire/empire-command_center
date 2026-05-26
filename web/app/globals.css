@@ -124,6 +124,16 @@ button:disabled {
   padding: 5px 10px;
   font-size: 12px;
 }
+.btn-xs {
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 /* Inputs */
 input,

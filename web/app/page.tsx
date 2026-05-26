@@ -27,6 +27,18 @@ export default function HomePage() {
     load();
   }, []);
 
+  async function remove(e: React.MouseEvent, id: string, pname: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Delete project "${pname}" and all its scenes?`)) return;
+    try {
+      await api.deleteProject(id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
@@ -89,7 +101,16 @@ export default function HomePage() {
             <a key={p.id} href={`/projects/${p.id}`} className="card">
               <div className="row spread">
                 <h2>{p.name}</h2>
-                <span className={`pill ${p.status}`}>{p.status}</span>
+                <div className="row">
+                  <span className={`pill ${p.status}`}>{p.status}</span>
+                  <button
+                    className="btn-ghost btn-xs"
+                    title="Delete project"
+                    onClick={(e) => remove(e, p.id, p.name)}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               {p.description && (
                 <p className="muted" style={{ marginTop: 8 }}>
