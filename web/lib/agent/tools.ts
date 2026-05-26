@@ -5,6 +5,7 @@ import { assembleProject } from "@/lib/assembleProject";
 import { generateImage } from "@/lib/imageWorker";
 import { generateAudio } from "@/lib/audioWorker";
 import { recordCost, recordRevenue, getSummary } from "@/lib/ledger";
+import { assertWithinBudget, getBudgetState, setCap } from "@/lib/budget";
 import { env } from "@/lib/env";
 import { ALLOWED_SIZES, ALLOWED_TASKS } from "@/lib/types";
 import type { Scene, Job, Asset } from "@/lib/types";
@@ -151,10 +152,21 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_finances",
     description:
-      "Get the profit & loss summary (total cost, total revenue, net). Pass project_id to scope to one project, omit for the whole platform.",
+      "Get profit & loss (total cost, revenue, net) plus the monthly spend cap and how much budget remains this month. Pass project_id to scope P&L to one project; budget is always platform-wide.",
     input_schema: {
       type: "object",
       properties: { project_id: { type: "string" } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "set_budget",
+    description:
+      "Set the monthly GPU spend cap in USD. Generations are blocked once this month's recorded cost reaches the cap. Set 0 for unlimited (no cap).",
+    input_schema: {
+      type: "object",
+      properties: { monthly_cap_usd: { type: "number" } },
+      required: ["monthly_cap_usd"],
       additionalProperties: false,
     },
   },
@@ -374,6 +386,7 @@ export async function runTool(
     }
 
     case "generate_audio": {
+      await assertWithinBudget();
       const out = await generateAudio(input);
       await recordCost({
         projectId: typeof input.project_id === "string" ? input.project_id : null,
@@ -404,10 +417,21 @@ export async function runTool(
       const summary = await getSummary(
         typeof input.project_id === "string" ? input.project_id : undefined
       );
-      return summary;
+      const budget = await getBudgetState();
+      return { ...summary, budget };
+    }
+
+    case "set_budget": {
+      const cap = Number(input.monthly_cap_usd);
+      if (!Number.isFinite(cap) || cap < 0) {
+        throw new Error("monthly_cap_usd must be a number >= 0");
+      }
+      await setCap(cap);
+      return { monthly_cap_usd: cap === 0 ? "unlimited" : Number(cap.toFixed(2)) };
     }
 
     case "generate_image": {
+      await assertWithinBudget();
       // Pass through the worker's typed fields; it validates per task.
       const out = await generateImage(input);
       const projectId =

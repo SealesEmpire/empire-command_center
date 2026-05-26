@@ -8,6 +8,7 @@ import {
 } from "./runpod";
 import { freshSignedUrl } from "./storage";
 import { recordCost } from "./ledger";
+import { assertWithinBudget } from "./budget";
 import { env } from "./env";
 import type { Job, Scene, Asset } from "./types";
 
@@ -31,6 +32,7 @@ function buildInput(scene: Scene, seed: number | null) {
  * RunPod, and moves the scene into the `generating` state.
  */
 export async function startGeneration(sceneId: string): Promise<Job> {
+  await assertWithinBudget();
   const db = supabaseAdmin();
 
   const { data: scene, error: sceneErr } = await db
@@ -256,9 +258,15 @@ async function finalizeFailure(
     .eq("id", job.id);
 
   // Auto-retry if the error is transient and we're under the attempt cap.
+  // A blocked retry (e.g. budget cap reached) must not crash the caller — fall
+  // through to marking the scene failed.
   if (isRetryable(errorCode) && job.attempt < env.maxGenerationAttempts()) {
-    const retriedJob = await startGeneration(job.scene_id);
-    return { job: { ...job, status: mapped }, retriedJob };
+    try {
+      const retriedJob = await startGeneration(job.scene_id);
+      return { job: { ...job, status: mapped }, retriedJob };
+    } catch {
+      /* fall through to mark failed */
+    }
   }
 
   await db.from("scenes").update({ status: "failed" }).eq("id", job.scene_id);

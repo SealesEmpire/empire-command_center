@@ -20,7 +20,7 @@ IMAGES (separate from video): use generate_image for stills, thumbnails, concept
 
 AUDIO: use generate_audio for music (prompt + duration) or voiceover (tts). To score a finished video, generate the audio first, then call assemble_project with audio_object_key set to the returned object_key — the soundtrack is muxed over the stitched video.
 
-FINANCES: generation costs are tracked automatically. Use record_revenue when the user reports income (a sale or client payment), and get_finances to report profit & loss (cost vs revenue vs net).
+FINANCES: generation costs are tracked automatically. Use record_revenue when the user reports income, and get_finances to report profit & loss plus the monthly spend cap. There is a monthly GPU spend cap — when it's reached, generation tools fail with a budget error; tell the user the cap is reached and offer to raise it with set_budget (do not raise it yourself without the user agreeing).
 
 Rules:
 - Video generation is asynchronous and takes minutes. After generate_scene, tell the user it's running; use check_jobs to poll — do not claim a clip exists until check_jobs or get_project shows one.

@@ -1,5 +1,6 @@
 import { startGeneration } from "@/lib/orchestrator";
-import { ok, serverError } from "@/lib/http";
+import { BudgetExceededError } from "@/lib/budget";
+import { ok, badRequest, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,7 @@ export async function POST(
     const job = await startGeneration(sceneId);
     return ok({ job }, { status: 202 });
   } catch (e) {
+    if (e instanceof BudgetExceededError) return badRequest(e.message);
     return serverError(e);
   }
 }

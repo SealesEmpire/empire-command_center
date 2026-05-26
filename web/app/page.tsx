@@ -13,16 +13,46 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finance, setFinance] = useState<LedgerSummary | null>(null);
+  const [budget, setBudget] = useState<{
+    cap: number;
+    monthSpend: number;
+    remaining: number | null;
+  } | null>(null);
+  const [capInput, setCapInput] = useState("");
   const [revAmount, setRevAmount] = useState("");
   const [revNote, setRevNote] = useState("");
 
   async function loadFinance() {
     try {
-      const res = await fetch("/api/ledger", { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok) setFinance(data.summary);
+      const [lRes, bRes] = await Promise.all([
+        fetch("/api/ledger", { cache: "no-store" }),
+        fetch("/api/budget", { cache: "no-store" }),
+      ]);
+      const lData = await lRes.json();
+      if (lRes.ok) setFinance(lData.summary);
+      const bData = await bRes.json();
+      if (bRes.ok) {
+        setBudget(bData);
+        setCapInput(bData.cap ? String(bData.cap) : "");
+      }
     } catch {
       /* ignore */
+    }
+  }
+
+  async function saveCap(e: React.FormEvent) {
+    e.preventDefault();
+    const cap = capInput.trim() === "" ? 0 : Number(capInput);
+    if (!Number.isFinite(cap) || cap < 0) return;
+    try {
+      await fetch("/api/budget", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monthly_cap_usd: cap }),
+      });
+      await loadFinance();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -129,6 +159,47 @@ export default function HomePage() {
               + Revenue
             </button>
           </form>
+
+          {budget && (
+            <>
+              <div className="divider" />
+              <div className="row spread" style={{ flexWrap: "wrap", gap: 12 }}>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Monthly cap{" "}
+                  <strong style={{ color: "var(--text)" }}>
+                    {budget.cap > 0 ? `$${budget.cap.toFixed(2)}` : "unlimited"}
+                  </strong>
+                  {" · "}spent this month ${budget.monthSpend.toFixed(2)}
+                  {budget.remaining !== null && (
+                    <>
+                      {" · "}
+                      <span
+                        style={{
+                          color:
+                            budget.remaining <= 0
+                              ? "var(--danger)"
+                              : "var(--accent-2)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        ${budget.remaining.toFixed(2)} left
+                      </span>
+                    </>
+                  )}
+                </span>
+                <form className="row" onSubmit={saveCap}>
+                  <input
+                    value={capInput}
+                    onChange={(e) => setCapInput(e.target.value)}
+                    placeholder="Cap $/mo (0 = none)"
+                    inputMode="decimal"
+                    style={{ maxWidth: 150 }}
+                  />
+                  <button className="btn-sm">Set cap</button>
+                </form>
+              </div>
+            </>
+          )}
         </div>
       )}
 

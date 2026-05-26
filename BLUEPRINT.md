@@ -146,7 +146,9 @@ orchestrator endpoints (`create job`, `get job`, `assemble`, `list assets`, …)
 Two halves: **control cost**, **generate revenue**, **measure both in the ledger**.
 
 **Cost control (build into the orchestrator):**
-- [ ] Per-job cost estimate before submit; per-project + global **spend caps**.
+- [x] **Monthly spend cap** (`budget` table) — blocks all paid generation once the
+      month's recorded cost reaches the cap; set in the dashboard or via the Manager.
+- [ ] Per-job pre-estimate / per-project caps (refinement).
 - [ ] Scale-to-zero on every endpoint (already the default) — pay only on use.
 - [ ] Model tiering: Haiku for routing/cheap steps, Opus only for hard planning.
 - [ ] Cache/reuse assets; dedupe identical prompts.
