@@ -11,7 +11,10 @@ export interface AssembleResult {
 // Collect a project's approved clips in scene order, concatenate them into a
 // final MP4, upload it, and link it on the project. Throws on any precondition
 // failure (no scenes, unapproved scenes, missing assets) or assembly error.
-export async function assembleProject(projectId: string): Promise<AssembleResult> {
+export async function assembleProject(
+  projectId: string,
+  audioObjectKey?: string
+): Promise<AssembleResult> {
   const db = supabaseAdmin();
 
   const { data: project } = await db
@@ -55,7 +58,7 @@ export async function assembleProject(projectId: string): Promise<AssembleResult
 
   let finalBuffer: Buffer;
   try {
-    finalBuffer = await assembleClips(objectKeys);
+    finalBuffer = await assembleClips(objectKeys, audioObjectKey);
   } catch (e) {
     await db.from("projects").update({ status: "failed" }).eq("id", projectId);
     throw e;

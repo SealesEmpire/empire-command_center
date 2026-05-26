@@ -18,6 +18,7 @@ export const env = {
   runpodApiKey: () => required("RUNPOD_API_KEY"),
   runpodEndpointId: () => required("RUNPOD_ENDPOINT_ID"),
   runpodImageEndpointId: () => required("RUNPOD_IMAGE_ENDPOINT_ID"),
+  runpodAudioEndpointId: () => required("RUNPOD_AUDIO_ENDPOINT_ID"),
 
   anthropicApiKey: () => required("ANTHROPIC_API_KEY"),
   // Optional extra knowledge/instructions appended to the Manager bot's system
@@ -39,4 +40,5 @@ export const env = {
   // Cost estimation for the ledger.
   gpuHourlyRateUsd: () => Number(optional("GPU_HOURLY_RATE_USD", "0.8")),
   imageCostUsd: () => Number(optional("IMAGE_COST_USD", "0.01")),
+  audioCostUsd: () => Number(optional("AUDIO_COST_USD", "0.02")),
 };

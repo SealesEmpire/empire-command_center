@@ -13,6 +13,7 @@ on:
     paths:
       - "wan22-runpod-worker/**"
       - "image-runpod-worker/**"
+      - "audio-runpod-worker/**"
       - ".github/workflows/build-worker.yml"
   workflow_dispatch:
     inputs:
@@ -34,6 +35,7 @@ jobs:
         worker:
           - { dir: wan22-runpod-worker, name: wan22-runpod-worker }
           - { dir: image-runpod-worker, name: image-runpod-worker }
+          - { dir: audio-runpod-worker, name: audio-runpod-worker }
     steps:
       - uses: actions/checkout@v4
 

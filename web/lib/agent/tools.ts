@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { startGeneration, syncJob, approveAsset } from "@/lib/orchestrator";
 import { assembleProject } from "@/lib/assembleProject";
 import { generateImage } from "@/lib/imageWorker";
+import { generateAudio } from "@/lib/audioWorker";
 import { recordCost, recordRevenue, getSummary } from "@/lib/ledger";
 import { env } from "@/lib/env";
 import { ALLOWED_SIZES, ALLOWED_TASKS } from "@/lib/types";
@@ -100,11 +101,35 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "assemble_project",
     description:
-      "Stitch every scene's approved clip (in order) into the final video. Fails if any scene lacks an approved clip. Returns the final video url. This is the last step.",
+      "Stitch every scene's approved clip (in order) into the final video. Fails if any scene lacks an approved clip. Optionally lay a soundtrack over it by passing audio_object_key (from a prior generate_audio call). Returns the final video url. This is the last step.",
     input_schema: {
       type: "object",
-      properties: { project_id: { type: "string" } },
+      properties: {
+        project_id: { type: "string" },
+        audio_object_key: {
+          type: "string",
+          description: "Optional object_key of a generated audio track to mux in",
+        },
+      },
       required: ["project_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "generate_audio",
+    description:
+      "Generate audio on the audio GPU worker (bot #3). Runs synchronously and returns an audio url + object_key. Tasks: 'music' (prompt + duration 1-60s → music) or 'tts' (text → voiceover). Use the returned object_key with assemble_project's audio_object_key to score a video.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task: { type: "string", enum: ["music", "tts"] },
+        prompt: { type: "string", description: "Music description (task=music)" },
+        duration: { type: "integer", description: "Seconds 1-60 (task=music)" },
+        text: { type: "string", description: "Words to speak (task=tts)" },
+        voice_preset: { type: "string", description: "Optional Bark voice (task=tts)" },
+        project_id: { type: "string" },
+      },
+      required: ["task"],
       additionalProperties: false,
     },
   },
@@ -341,8 +366,23 @@ export async function runTool(
     }
 
     case "assemble_project": {
-      const result = await assembleProject(String(input.project_id ?? ""));
+      const result = await assembleProject(
+        String(input.project_id ?? ""),
+        typeof input.audio_object_key === "string" ? input.audio_object_key : undefined
+      );
       return { final_video_url: result.url };
+    }
+
+    case "generate_audio": {
+      const out = await generateAudio(input);
+      await recordCost({
+        projectId: typeof input.project_id === "string" ? input.project_id : null,
+        source: "audio_generation",
+        amountUsd: env.audioCostUsd(),
+        description: `${out.task} audio`,
+        metadata: { task: out.task },
+      });
+      return { task: out.task, url: out.url, object_key: out.object_key };
     }
 
     case "record_revenue": {

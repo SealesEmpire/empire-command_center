@@ -18,6 +18,8 @@ VIDEO pipeline:
 
 IMAGES (separate from video): use generate_image for stills, thumbnails, concept art, edits, and face swaps. It runs synchronously and returns image url(s) immediately — there is no approve/assemble step for standalone images.
 
+AUDIO: use generate_audio for music (prompt + duration) or voiceover (tts). To score a finished video, generate the audio first, then call assemble_project with audio_object_key set to the returned object_key — the soundtrack is muxed over the stitched video.
+
 FINANCES: generation costs are tracked automatically. Use record_revenue when the user reports income (a sale or client payment), and get_finances to report profit & loss (cost vs revenue vs net).
 
 Rules:

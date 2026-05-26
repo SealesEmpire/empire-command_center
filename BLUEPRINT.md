@@ -24,6 +24,7 @@ client work, campaigns, and (carefully) trading — making it **self-sustaining*
 | GPU job pattern (validate → job → asset URL → `error_code`) | ✅ | `wan22-runpod-worker/` |
 | **Bot #1 — Video** (WAN 2.2) | ✅ | `wan22-runpod-worker/` |
 | **Bot #2 — Image** (txt2img/img2img/inpaint/faceswap) | ✅ | `image-runpod-worker/` |
+| **Bot #3 — Audio** (music / voiceover) + assembler audio mux | ✅ | `audio-runpod-worker/`, `web/lib/assembler.ts` |
 | **Manager bot** (Claude Opus 4.7, text-first) — drives the pipeline via tools | ✅ | `web/lib/agent/`, `web/app/api/agent`, `/manager` |
 | Orchestrator API + retry/state machine | ✅ | `web/lib/orchestrator.ts`, `web/app/api/**` |
 | Dashboard (scene workflow, edit/reorder/generate-all) | ✅ | `web/app`, `web/components` |

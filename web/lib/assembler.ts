@@ -24,13 +24,17 @@ function run(args: string[], cwd: string): Promise<void> {
 
 /**
  * Download the given clip object keys (in order), concatenate them into a
- * single MP4, and return the resulting buffer.
+ * single MP4, optionally lay an audio track over it, and return the buffer.
  *
- * Uses the concat demuxer with stream copy (-c copy) since every clip is
- * produced by the same WAN config (identical codec/resolution/fps). If you
- * ever mix resolutions, switch to the concat *filter* with re-encode.
+ * Video concat uses the concat demuxer with stream copy (-c copy) since every
+ * clip is produced by the same WAN config (identical codec/resolution/fps). If
+ * an `audioObjectKey` is given, a second pass muxes the audio (encoded to AAC),
+ * trimming to the shorter of the two streams.
  */
-export async function assembleClips(objectKeys: string[]): Promise<Buffer> {
+export async function assembleClips(
+  objectKeys: string[],
+  audioObjectKey?: string
+): Promise<Buffer> {
   if (objectKeys.length === 0) {
     throw new Error("No clips to assemble.");
   }
@@ -52,25 +56,28 @@ export async function assembleClips(objectKeys: string[]): Promise<Buffer> {
       .join("\n");
     await writeFile(listPath, listBody);
 
-    const outPath = join(dir, "final.mp4");
+    const concatPath = join(dir, "concat.mp4");
     await run(
-      [
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        listPath,
-        "-c",
-        "copy",
-        "-movflags",
-        "+faststart",
-        outPath,
-      ],
+      ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy",
+       "-movflags", "+faststart", concatPath],
       dir
     );
 
+    if (!audioObjectKey) {
+      return await readFile(concatPath);
+    }
+
+    // Mux audio over the concatenated video.
+    const audioPath = join(dir, "audio.wav");
+    await writeFile(audioPath, await downloadObject(audioObjectKey));
+    const outPath = join(dir, "final.mp4");
+    await run(
+      ["-y", "-i", concatPath, "-i", audioPath,
+       "-map", "0:v:0", "-map", "1:a:0",
+       "-c:v", "copy", "-c:a", "aac", "-shortest",
+       "-movflags", "+faststart", outPath],
+      dir
+    );
     return await readFile(outPath);
   } finally {
     await rm(dir, { recursive: true, force: true });
