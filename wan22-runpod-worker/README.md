@@ -76,12 +76,20 @@ GPUs are x86_64, which matters on Apple Silicon).
 - on every push to `main` that touches `wan22-runpod-worker/**`
 - on demand from the **Actions** tab (Run workflow → optional `tag` input)
 
-It uses the built-in `GITHUB_TOKEN` — **no secrets to configure**. The resulting
-package inherits the repo's visibility, so it stays **private**. Image lands at:
+It also runs on pushes to any `claude/**` dev branch (so you can build before
+merging). It uses the built-in `GITHUB_TOKEN` — **no secrets to configure**. The
+package inherits the repo's visibility, so it stays **private**. Each run pushes:
 
 ```
-ghcr.io/sealesempire/wan22-runpod-worker:<git-sha>   (and :latest on main)
+ghcr.io/sealesempire/wan22-runpod-worker:<git-sha>          # immutable, per commit
+ghcr.io/sealesempire/wan22-runpod-worker:<branch-name>      # stable, moves with the branch
+ghcr.io/sealesempire/wan22-runpod-worker:latest             # main branch only
 ```
+
+The **branch tag** (e.g. `:claude-new-session-3sdse`) is handy during
+development — point the RunPod endpoint at it once and every new branch build is
+picked up on the next cold start. The run's **Summary** prints the exact tags to
+paste into RunPod.
 
 ### Option B — local helper script
 
