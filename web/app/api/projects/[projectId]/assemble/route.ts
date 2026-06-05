@@ -42,19 +42,30 @@ export async function POST(
       );
     }
 
-    // Resolve approved asset object keys in scene order.
+    // Resolve approved asset object keys in scene order. Scope the lookup to
+    // this project so a stale or cross-project approved_asset_id can never pull
+    // a foreign clip into the assembly.
     const approvedIds = ordered.map((s) => s.approved_asset_id as string);
     const { data: assets } = await db
       .from("assets")
       .select("*")
+      .eq("project_id", projectId)
       .in("id", approvedIds)
       .returns<Asset[]>();
     const assetById = new Map((assets ?? []).map((a) => [a.id, a]));
-    const objectKeys = approvedIds.map((id) => {
-      const a = assetById.get(id);
-      if (!a) throw new Error(`Approved asset ${id} not found`);
-      return a.object_key;
-    });
+
+    // An approved id with no matching asset means the clip was deleted or
+    // belongs to another project. Surface a clear, actionable error rather than
+    // failing deep inside ffmpeg.
+    const missing = ordered.filter(
+      (s) => !assetById.has(s.approved_asset_id as string)
+    );
+    if (missing.length > 0) {
+      return badRequest(
+        `Approved clip missing for ${missing.length} scene(s) (deleted or not part of this project). Re-approve a clip for those scenes and try again.`
+      );
+    }
+    const objectKeys = approvedIds.map((id) => assetById.get(id)!.object_key);
 
     await db.from("projects").update({ status: "assembling" }).eq("id", projectId);
 

@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabase";
 import {
   submitJob,
   getJobStatus,
+  cancelJob,
   mapRunpodStatus,
   isRetryable,
   type WorkerOutput,
@@ -63,15 +64,11 @@ export async function startGeneration(sceneId: string): Promise<Job> {
     .single<Job>();
   if (jobErr || !job) throw new Error(`Failed to create job: ${jobErr?.message}`);
 
+  // Submit to RunPod. A failure here means no GPU job was created yet, so it is
+  // safe to mark the job failed.
+  let submitted;
   try {
-    const submitted = await submitJob(input);
-    await db
-      .from("jobs")
-      .update({
-        runpod_job_id: submitted.id,
-        status: mapRunpodStatus(submitted.status),
-      })
-      .eq("id", job.id);
+    submitted = await submitJob(input);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await db
@@ -85,6 +82,31 @@ export async function startGeneration(sceneId: string): Promise<Job> {
       .eq("id", job.id);
     await db.from("scenes").update({ status: "failed" }).eq("id", scene.id);
     throw new Error(`RunPod submit failed: ${msg}`);
+  }
+
+  // The GPU job is now live. Persist its id on its own statement: if we cannot
+  // record it, the job would run to completion untracked and burn credits with
+  // no way to reconcile, so cancel it and fail loudly rather than orphan it.
+  const { error: persistErr } = await db
+    .from("jobs")
+    .update({
+      runpod_job_id: submitted.id,
+      status: mapRunpodStatus(submitted.status),
+    })
+    .eq("id", job.id);
+  if (persistErr) {
+    await cancelJob(submitted.id).catch(() => {});
+    await db
+      .from("jobs")
+      .update({
+        status: "failed",
+        error_code: "PERSIST_FAILED",
+        error: `Submitted RunPod job ${submitted.id} but could not record its id; the job was canceled. ${persistErr.message}`,
+        finished_at: new Date().toISOString(),
+      })
+      .eq("id", job.id);
+    await db.from("scenes").update({ status: "failed" }).eq("id", scene.id);
+    throw new Error(`Failed to persist RunPod job id: ${persistErr.message}`);
   }
 
   await db.from("scenes").update({ status: "generating" }).eq("id", scene.id);
@@ -140,7 +162,25 @@ export async function syncJob(jobId: string): Promise<SyncResult> {
   }
 
   if (!job.runpod_job_id) {
-    return { job };
+    // Allow a brief window for an in-flight submission (startGeneration runs
+    // insert -> submit -> persist-id within one request). Past that, a missing
+    // id means submission never completed; fail the job instead of polling it
+    // forever so the operator can retry.
+    const startedMs = job.started_at ? Date.parse(job.started_at) : Date.now();
+    if (Date.now() - startedMs < 60_000) {
+      return { job };
+    }
+    await db
+      .from("jobs")
+      .update({
+        status: "failed",
+        error_code: "NO_RUNPOD_ID",
+        error: "Job has no RunPod id; submission did not complete.",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("id", job.id);
+    await db.from("scenes").update({ status: "failed" }).eq("id", job.scene_id);
+    return { job: { ...job, status: "failed" } };
   }
 
   const rp = await getJobStatus(job.runpod_job_id);
