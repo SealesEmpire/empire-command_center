@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Project, Scene, Asset, Job } from "@/lib/types";
 import SceneCard from "./SceneCard";
@@ -63,9 +64,9 @@ export default function SceneBoard({ projectId }: { projectId: string }) {
     <div className="stack">
       <div className="row spread">
         <div>
-          <a href="/" className="muted" style={{ fontSize: 12 }}>
+          <Link href="/" className="muted" style={{ fontSize: 12 }}>
             ← All projects
-          </a>
+          </Link>
           <h1 style={{ marginTop: 6 }}>{project.name}</h1>
           <div className="row" style={{ marginTop: 4 }}>
             <span className={`pill ${project.status}`}>{project.status}</span>

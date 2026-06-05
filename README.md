@@ -135,6 +135,34 @@ then `npm start`), where ffmpeg has no time ceiling.
 If a scene fails, the card shows the worker's `error_code` + message; retryable
 errors auto-retry up to the cap.
 
+## Troubleshooting & operations
+
+**Debugging a failed generation.** The scene card shows the `error_code` from the
+worker. The codes and their meaning are documented in
+[`wan22-runpod-worker/README.md`](wan22-runpod-worker/README.md) (input schema /
+error codes). Retryable codes (`SUBPROCESS_ERROR`, `NO_OUTPUT`,
+`GENERATION_FAILED`, `TIMEOUT`) auto-retry up to `MAX_GENERATION_ATTEMPTS`;
+`INVALID_INPUT` / `MODEL_NOT_FOUND` fail fast and need a prompt/config fix. The
+orchestrator emits one structured JSON log line per lifecycle event
+(`Submitted generation`, `Generation failed`, …) keyed by `job_id` / `scene_id`
+— grep those in your host's logs. A job stuck `queued` with no `runpod_job_id`
+is auto-failed (`NO_RUNPOD_ID`) after ~60s rather than polling forever.
+
+**Recovering from a partial assembly failure.** Assembly is all-or-nothing: it
+downloads every approved clip, runs ffmpeg, then uploads. If ffmpeg or the
+upload fails the project is set back to `failed` and **no** final asset is
+written, so nothing is half-saved — fix the cause (see the full ffmpeg stderr in
+the logs) and click **Assemble** again. If an approved clip was deleted, the
+assemble call returns a clear "approved clip missing for N scene(s)" error;
+re-approve a take for those scenes and retry.
+
+**Cost / spend.** Each generation attempt is one RunPod GPU run. To gauge spend
+per project, count `jobs` rows: e.g.
+`select project_id, count(*) from jobs group by 1`. Only one job per scene can be
+in flight at a time (enforced by a partial unique index in
+`supabase/migrations/0002_guards.sql`), so double-clicking **Generate** can't
+double-bill. Hard per-project spend caps are still on the roadmap (see below).
+
 ## Security notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` and all `S3_*` secrets are **server-only** — they

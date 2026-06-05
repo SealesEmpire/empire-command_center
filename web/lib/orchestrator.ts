@@ -9,6 +9,7 @@ import {
 } from "./runpod";
 import { freshSignedUrl } from "./storage";
 import { env } from "./env";
+import { log } from "./log";
 import type { Job, Scene, Asset } from "./types";
 
 // Build the worker input payload from a scene + attempt seed.
@@ -39,6 +40,21 @@ export async function startGeneration(sceneId: string): Promise<Job> {
     .eq("id", sceneId)
     .single<Scene>();
   if (sceneErr || !scene) throw new Error(`Scene not found: ${sceneId}`);
+
+  // Guard against double-submits / spend spam: if a job for this scene is still
+  // in flight, refuse to start another racing GPU job. (A partial unique index
+  // on jobs(scene_id) where status in queued/in_progress enforces this at the
+  // DB level too; this check just yields a friendlier error first.)
+  const { data: active } = await db
+    .from("jobs")
+    .select("id")
+    .eq("scene_id", sceneId)
+    .in("status", ["queued", "in_progress"])
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (active) {
+    throw new Error("A generation is already in progress for this scene.");
+  }
 
   // Attempt number = existing job count + 1
   const { count } = await db
@@ -95,6 +111,12 @@ export async function startGeneration(sceneId: string): Promise<Job> {
     })
     .eq("id", job.id);
   if (persistErr) {
+    log.error("Failed to persist RunPod job id; canceling orphan", {
+      job_id: job.id,
+      scene_id: scene.id,
+      runpod_job_id: submitted.id,
+      error: persistErr.message,
+    });
     await cancelJob(submitted.id).catch(() => {});
     await db
       .from("jobs")
@@ -108,6 +130,14 @@ export async function startGeneration(sceneId: string): Promise<Job> {
     await db.from("scenes").update({ status: "failed" }).eq("id", scene.id);
     throw new Error(`Failed to persist RunPod job id: ${persistErr.message}`);
   }
+
+  log.info("Submitted generation", {
+    job_id: job.id,
+    scene_id: scene.id,
+    project_id: scene.project_id,
+    runpod_job_id: submitted.id,
+    attempt,
+  });
 
   await db.from("scenes").update({ status: "generating" }).eq("id", scene.id);
   await db
@@ -185,7 +215,21 @@ export async function syncJob(jobId: string): Promise<SyncResult> {
 
   const rp = await getJobStatus(job.runpod_job_id);
   const mapped = mapRunpodStatus(rp.status);
-  const output = (rp.output ?? undefined) as WorkerOutput | undefined;
+
+  // RunPod's `output` is arbitrary JSON. Only trust it if it's a plain object;
+  // a malformed/non-object payload is ignored (and logged) rather than fed into
+  // the success/failure logic as if it were a WorkerOutput.
+  let output: WorkerOutput | undefined;
+  if (rp.output != null) {
+    if (typeof rp.output === "object" && !Array.isArray(rp.output)) {
+      output = rp.output as unknown as WorkerOutput;
+    } else {
+      log.warn("Ignoring non-object RunPod output", {
+        job_id: job.id,
+        runpod_job_id: job.runpod_job_id,
+      });
+    }
+  }
 
   // Still running.
   if (mapped === "queued" || mapped === "in_progress") {
@@ -229,6 +273,10 @@ async function finalizeSuccess(
   if (!objectKey) {
     // Worker completed but storage wasn't configured. Record the failure so the
     // operator fixes infra rather than silently producing un-assemblable clips.
+    log.error("Worker completed without an object_key (storage misconfigured?)", {
+      job_id: job.id,
+      scene_id: job.scene_id,
+    });
     await db.from("scenes").update({ status: "failed" }).eq("id", job.scene_id);
     return {
       job: { ...job, status: "completed" },
@@ -278,6 +326,14 @@ async function finalizeFailure(
       finished_at: new Date().toISOString(),
     })
     .eq("id", job.id);
+
+  log.warn("Generation failed", {
+    job_id: job.id,
+    scene_id: job.scene_id,
+    status: mapped,
+    error_code: errorCode,
+    attempt: job.attempt,
+  });
 
   // Auto-retry if the error is transient and we're under the attempt cap.
   if (isRetryable(errorCode) && job.attempt < env.maxGenerationAttempts()) {

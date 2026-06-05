@@ -17,7 +17,12 @@ function run(args: string[], cwd: string): Promise<void> {
     proc.on("error", reject);
     proc.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-4000)}`));
+      else {
+        // Log the full stderr for debugging; surface a generous tail in the
+        // thrown error (4KB was often too little to see the real cause).
+        console.error(`ffmpeg failed (exit ${code}):\n${stderr}`);
+        reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-12000)}`));
+      }
     });
   });
 }
@@ -56,6 +61,10 @@ export async function assembleClips(objectKeys: string[]): Promise<Buffer> {
     await run(
       [
         "-y",
+        // Restrict the concat demuxer to local files/pipes only — never network
+        // protocols — so a crafted list entry can't make ffmpeg fetch a URL.
+        "-protocol_whitelist",
+        "file,pipe",
         "-f",
         "concat",
         "-safe",
