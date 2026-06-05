@@ -188,6 +188,14 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
 
     log.info("Job %s starting", job_id)
 
+    # Validate input first — cheap, side-effect-free, and gives the caller a
+    # precise error instead of masking bad input behind infra state below.
+    try:
+        params = _validate_input(job_input)
+    except ValueError as e:
+        log.warning("Job %s validation failed: %s", job_id, e)
+        return {"status": "failed", "error_code": "INVALID_INPUT", "error": str(e)}
+
     if not MODEL_DIR.exists():
         return {
             "status": "failed",
@@ -195,13 +203,6 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             "error": f"Model directory does not exist: {MODEL_DIR}",
             "fix": "Attach a RunPod Network Volume and preload Wan2.2 model weights.",
         }
-
-    # Validate input
-    try:
-        params = _validate_input(job_input)
-    except ValueError as e:
-        log.warning("Job %s validation failed: %s", job_id, e)
-        return {"status": "failed", "error_code": "INVALID_INPUT", "error": str(e)}
 
     output_id = str(uuid.uuid4())
     output_path = OUTPUT_DIR / f"{output_id}.mp4"
