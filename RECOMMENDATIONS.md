@@ -22,6 +22,22 @@ solid foundation, not rescuing it.
 
 ---
 
+## Implementation status (2026-06-05)
+
+**Applied** on `claude/project-recommendations-Ma2JD`: P0 #1–3 (orphaned jobs,
+assembly asset validation, re-signed URLs on read), P1 #4–8 (env validation,
+SSRF guard, S3_REGION docs, in-flight generation guard, ffmpeg hardening), P2
+#9–12 (Vitest tests, GitHub Actions CI, double-generate DB guard, structured
+logging), P3 #14–16 (CHECK constraints + concurrency index in migration 0002,
+RunPod output shape validation, operations runbook). Verified: `tsc`, `next
+lint`, and `vitest` all green.
+
+**Deferred** (needs infra, not a patch): P2 #13 — moving ffmpeg assembly to a
+background queue/worker to escape the Vercel function time limit. Tracked in the
+README "Deploy" notes.
+
+---
+
 ## P0 — Correctness & data integrity
 
 1. **Orphaned RunPod jobs on partial failure**
